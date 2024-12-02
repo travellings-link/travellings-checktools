@@ -27,7 +27,7 @@ const data = ref({
   data: []
 })
 
-onMounted(async () => {
+/* onMounted(async () => {
   if (isClient) {
     const tStorage = useCookies(['_tlogin'])
     const token = tStorage.get('_tlogin')
@@ -60,7 +60,7 @@ onMounted(async () => {
       router.push('/auth/login')
     }
   }
-})
+}) */
 
 useHead({ title: '仪表盘 - 巡查工具 | 开往' })
 </script>

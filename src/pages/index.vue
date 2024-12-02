@@ -15,7 +15,8 @@ onMounted(async () => {
     const token = tStorage.get('_tlogin')
     const router = useRouter()
 
-    if (token) {
+    router.push('/dashboard')
+    /* if (token) {
       const res = await api.get('/user', {
         headers: {
           'Cookie': `_tLogin=${token}`
@@ -42,7 +43,7 @@ onMounted(async () => {
       }
     } else {
       router.push('/auth/login')
-    }
+    } */
   }
 })
 
