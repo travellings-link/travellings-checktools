@@ -169,7 +169,11 @@ async function logOut() {
     onConfirm() {
       if (isClient) {
         try {
-          const res = api.post('/logout')
+          const res = api.post('/logout', {
+            headers: {
+              'Cookie': `_tLogin=${token}`
+            }
+          })
           tStorage.remove('_tlogin')
         } catch (error) {
           console.error('Logout failed:', error)

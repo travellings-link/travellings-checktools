@@ -33,16 +33,14 @@ onMounted(async () => {
     const token = tStorage.get('_tlogin')
     const router = useRouter()
 
-    if (!token) {
-      snackbar({
-        message: '未授权的访问，请先登录。',
-        closeable: true
-      })
-      router.push('/auth/login')
-    } else if (token) {
+    if (token) {
       try {
-        const res = await api.get('user')
-        if (res.data.role !== 0) {
+        const res = await api.get('user', {
+          headers: {
+            'Cookie': `_tLogin=${token}`
+          }
+        })
+        if (res.data.data.role !== 0) {
           snackbar({
             message: '您没有权限访问此页面。',
             closeable: true
@@ -54,6 +52,12 @@ onMounted(async () => {
       } catch (error) {
         console.error(error)
       }
+    } else {
+      snackbar({
+        message: '未授权的访问，请先登录。',
+        closeable: true
+      })
+      router.push('/auth/login')
     }
   }
 })

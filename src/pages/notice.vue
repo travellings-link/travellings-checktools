@@ -28,7 +28,11 @@ if (isClient) {
   if (!token) {
     router.push('/auth/login')
   } else {
-    const res = await api.get('/user')
+    const res = await api.get('/user', {
+      headers: {
+        Cookie: `_tLogin=${token}`
+      }
+    })
     user.value = res.data.data.user
     if (res.data.data.role === 0) {
       router.push('/dashboard')

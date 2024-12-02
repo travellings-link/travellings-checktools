@@ -16,7 +16,11 @@ onMounted(async () => {
     const router = useRouter()
 
     if (token) {
-      const res = await api.get('/user')
+      const res = await api.get('/user', {
+        headers: {
+          'Cookie': `_tLogin=${token}`
+        }
+      })
       if (res.data.data.role === 0) {
         snackbar({
           message: '已经以管理员 ' + res.data.data.username + ' 的身份登录。',
