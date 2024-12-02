@@ -2,7 +2,7 @@
 
 <script setup lang="ts">
 import { useHead, useSeoMeta } from '@unhead/vue'
-import { useStorage } from '@vueuse/core'
+import { useCookies } from '@vueuse/integrations/useCookies'
 import { useRouter } from 'vue-router'
 import { isClient } from '@vueuse/core'
 import { snackbar } from 'mdui/functions/snackbar.js'
@@ -11,15 +11,11 @@ import { onMounted } from 'vue'
 
 onMounted(async () => {
   if (isClient) {
-    const tStorage = useStorage('tlogin', null)
+    const tStorage = useCookies(['_tlogin']).get('_tlogin')
     const router = useRouter()
 
-    if (tStorage.value) {
-      const res = await api.get('/user', {
-        headers: {
-          Cookie: '_tlogin=' + tStorage.value
-        }
-      })
+    if (tStorage) {
+      const res = await api.get('/user')
       if (res.data.data.role === 0) {
         snackbar({
           message: '已经以管理员 ' + res.data.data.username + ' 的身份登录。',

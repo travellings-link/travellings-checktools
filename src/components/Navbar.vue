@@ -94,10 +94,11 @@ import { confirm } from 'mdui/functions/confirm.js'
 import { setTheme } from 'mdui/functions/setTheme.js'
 import { computed, onMounted, onUnmounted, ref, watch, watchEffect } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useStorage, isClient } from '@vueuse/core'
+import { isClient } from '@vueuse/core'
+import { useCookies } from '@vueuse/integrations/useCookies'
 import api from '@/utils/tApi.ts'
 
-const tStorage = useStorage('tlogin', null)
+const tStorage = useCookies(['_tlogin']).get('_tlogin')
 const isMobile = computed(() => windowWidth.value < 768)
 const route = useRoute()
 const currentPage = ref(route.path)
@@ -115,7 +116,7 @@ const updateWindowWidth = () => {
 }
 
 if (isClient) {
-  if (tStorage.value) {
+  if (tStorage) {
     isLoggedIn.value = true
   } else {
     isLoggedIn.value = false
@@ -169,7 +170,7 @@ async function logOut() {
         try {
           const res = api.post('/logout', null, {
             headers: {
-              'Cookie': '_tlogin=' + tStorage.value
+              Cookie: '_tlogin=' + tStorage.value
             }
           })
           tStorage.value = null

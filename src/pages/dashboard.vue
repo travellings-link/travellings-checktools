@@ -12,7 +12,7 @@
 <script setup lang="ts">
 import { useHead } from '@unhead/vue'
 import { onMounted } from 'vue'
-import { useStorage } from '@vueuse/core'
+import { useCookies } from '@vueuse/integrations/useCookies'
 import { useRouter } from 'vue-router'
 import { snackbar } from 'mdui/functions/snackbar.js'
 import { isClient } from '@vueuse/core'
@@ -29,22 +29,18 @@ const data = ref({
 
 onMounted(async () => {
   if (isClient) {
-    const tStorage = useStorage('tlogin', null)
+    const tStorage = useCookies(['_tlogin']).get('_tlogin')
     const router = useRouter()
 
-    if (!tStorage.value) {
+    if (!tStorage) {
       snackbar({
         message: '未授权的访问，请先登录。',
         closeable: true
       })
       router.push('/auth/login')
-    } else if (tStorage.value) {
+    } else if (tStorage) {
       try {
-        const res = await api.get('user', {
-          headers: {
-            Cookie: `_tLogin=${tStorage.value}`
-          }
-        })
+        const res = await api.get('user')
         if (res.data.role !== 0) {
           snackbar({
             message: '您没有权限访问此页面。',
