@@ -27,6 +27,11 @@ const data = ref({
   data: []
 })
 
+onMounted(async () => {
+  const response = await api.get('/all')
+  data.value = response.data
+})
+
 /* onMounted(async () => {
   if (isClient) {
     const tStorage = useCookies(['_tlogin'])
