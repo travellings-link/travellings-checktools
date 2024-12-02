@@ -98,7 +98,8 @@ import { isClient } from '@vueuse/core'
 import { useCookies } from '@vueuse/integrations/useCookies'
 import api from '@/utils/tApi.ts'
 
-const tStorage = useCookies(['_tlogin']).get('_tlogin')
+const tStorage = useCookies(['_tlogin'])
+const token = tStorage.get('_tlogin')
 const isMobile = computed(() => windowWidth.value < 768)
 const route = useRoute()
 const currentPage = ref(route.path)
@@ -116,7 +117,7 @@ const updateWindowWidth = () => {
 }
 
 if (isClient) {
-  if (tStorage) {
+  if (token) {
     isLoggedIn.value = true
   } else {
     isLoggedIn.value = false
@@ -144,7 +145,7 @@ watch(route, (to) => {
 })
 
 if (isClient) {
-  watch(tStorage, (value) => {
+  watch(token, (value) => {
     if (value) {
       isLoggedIn.value = true
     } else {
@@ -168,12 +169,8 @@ async function logOut() {
     onConfirm() {
       if (isClient) {
         try {
-          const res = api.post('/logout', null, {
-            headers: {
-              Cookie: '_tlogin=' + tStorage.value
-            }
-          })
-          tStorage.value = null
+          const res = api.post('/logout')
+          tStorage.remove('_tlogin')
         } catch (error) {
           console.error('Logout failed:', error)
         }

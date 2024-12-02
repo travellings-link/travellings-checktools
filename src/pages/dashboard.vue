@@ -29,16 +29,17 @@ const data = ref({
 
 onMounted(async () => {
   if (isClient) {
-    const tStorage = useCookies(['_tlogin']).get('_tlogin')
+    const tStorage = useCookies(['_tlogin'])
+    const token = tStorage.get('_tlogin')
     const router = useRouter()
 
-    if (!tStorage) {
+    if (!token) {
       snackbar({
         message: '未授权的访问，请先登录。',
         closeable: true
       })
       router.push('/auth/login')
-    } else if (tStorage) {
+    } else if (token) {
       try {
         const res = await api.get('user')
         if (res.data.role !== 0) {

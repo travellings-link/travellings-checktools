@@ -11,10 +11,11 @@ import { onMounted } from 'vue'
 
 onMounted(async () => {
   if (isClient) {
-    const tStorage = useCookies(['_tlogin']).get('_tlogin')
+    const tStorage = useCookies(['_tlogin'])
+    const token = tStorage.get('_tlogin')
     const router = useRouter()
 
-    if (tStorage) {
+    if (token) {
       const res = await api.get('/user')
       if (res.data.data.role === 0) {
         snackbar({
@@ -22,7 +23,7 @@ onMounted(async () => {
           closeable: true
         })
         router.push('/dashboard')
-      } else if (res.data.data.role !== 0) {
+      } else if (res.data.data.role > 0) {
         snackbar({
           message: '已经以用户 ' + res.data.data.username + ' 的身份登录。',
           closeable: true

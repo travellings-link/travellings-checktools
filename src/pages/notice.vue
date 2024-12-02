@@ -21,10 +21,11 @@ const notAdmin = ref(false)
 const user = ref('')
 
 if (isClient) {
-  const tStorage = useCookies(['_tlogin']).get('_tlogin')
+  const tStorage = useCookies(['_tlogin'])
+  const token = tStorage.get('_tlogin')
   const router = useRouter()
 
-  if (!tStorage) {
+  if (!token) {
     router.push('/auth/login')
   } else {
     const res = await api.get('/user')
