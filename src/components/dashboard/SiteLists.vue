@@ -76,6 +76,7 @@
 </template>
 
 <script setup lang="ts">
+// @ts-nocheck why reporting TS2551 for HTML elements?
 import { ref, watch } from 'vue'
 
 import '@mdui/icons/error-outline.js'

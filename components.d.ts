@@ -17,6 +17,5 @@ declare module 'vue' {
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     SiteLists: typeof import('./src/components/dashboard/SiteLists.vue')['default']
-    TotalData: typeof import('./src/components/dashboard/TotalData.vue')['default']
   }
 }

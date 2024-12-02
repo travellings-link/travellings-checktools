@@ -45,6 +45,7 @@
 </template>
 
 <script setup lang="ts">
+// @ts-nocheck why reporting TS2551 for HTML elements?
 import '@mdui/icons/insert-chart-outlined.js'
 import '@mdui/icons/error-outline.js'
 import '@mdui/icons/image-not-supported--outlined.js'
