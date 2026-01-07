@@ -1,7 +1,0 @@
-:not(:defined) {
-  visibility: hidden;
-}
-
-.link {
-  text-decoration: none;
-}
