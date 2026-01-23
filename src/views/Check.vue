@@ -83,7 +83,7 @@
             </mdui-button>
           </div>
         </div>
-        <mdui-tooltip content="键盘快捷键：1=正常，2=异常，3=误报，Enter=提交，ESC=跳过">
+        <mdui-tooltip content="键盘快捷键：1=正常，2=异常，3=误报，Ctrl+Enter=提交，ESC=跳过">
           <p class="text-sm text-gray-500 mt-2 cursor-help">
             💡 提示：可以使用键盘快捷键快速操作
           </p>
@@ -231,10 +231,11 @@ function handleKeyPress(event) {
     checkResult.value = '异常'
   } else if (event.key === '3') {
     checkResult.value = '误报'
-  } else if (event.key === 'Enter' && checkResult.value && !submitting.value) {
-    // Enter键提交
+  } else if (event.key === 'Enter' && (event.ctrlKey || event.metaKey) && checkResult.value && !submitting.value) {
+    // Ctrl+Enter 或 Cmd+Enter 提交
     event.preventDefault()
     submitCheck()
+  }
   } else if (event.key === 'Escape') {
     // ESC键跳过
     skipSite()
