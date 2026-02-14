@@ -235,7 +235,6 @@ function handleKeyPress(event) {
     // Ctrl+Enter 或 Cmd+Enter 提交
     event.preventDefault()
     submitCheck()
-  }
   } else if (event.key === 'Escape') {
     // ESC键跳过
     skipSite()
