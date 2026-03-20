@@ -2,7 +2,7 @@ import axios from 'axios'
 import { useAuthStore } from '../stores/auth'
 
 const api = axios.create({
-  baseURL: 'https://api.check-tool.travellings.cn/api',
+  baseURL: 'https://api-check-tool.travellings.cn/api',
   timeout: 10000
 })
 
