@@ -1,6 +1,7 @@
 {
-  "name": "travellings-check-tool-frontend",
-  "version": "1.0.0",
+  "name": "travellings-check-tool",
+  "private": true,
+  "version": "2.0.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -8,21 +9,20 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@mdui/icons": "^1.0.2",
-    "@unhead/vue": "^1.11.13",
-    "@vueuse/core": "^12.0.0",
-    "@vueuse/integrations": "^12.0.0",
-    "axios": "^1.7.8",
-    "mdui": "^2.1.3",
-    "pinia": "^2.2.8",
-    "unocss": "^0.65.0",
-    "vue": "^3.5.13",
-    "vue-router": "^4.5.0"
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.0",
+    "@mui/icons-material": "^7.3.2",
+    "@mui/material": "^7.3.2",
+    "axios": "^1.12.2",
+    "md5": "^2.3.0",
+    "react": "^19.1.1",
+    "react-dom": "^19.1.1",
+    "react-router-dom": "^7.9.1"
   },
   "devDependencies": {
-    "@vitejs/plugin-vue": "^5.2.1",
-    "unocss": "^0.65.0",
+    "@tailwindcss/vite": "^4.1.13",
+    "@vitejs/plugin-react": "^4.3.4",
+    "tailwindcss": "^4.1.13",
     "vite": "^5.4.11"
   }
 }
-
