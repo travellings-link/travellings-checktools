@@ -23,6 +23,7 @@ import md5 from 'md5'
 import { useEffect, useMemo, useState } from 'react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
+import SessionGuard from '../components/SessionGuard'
 
 const drawerWidth = 260
 const appBarHeight = 64 // 与 theme.mixins.toolbar 默认高度一致
@@ -200,6 +201,7 @@ function AppLayout() {
           </Box>
         </Box>
       </Box>
+      <SessionGuard />
     </Box>
   )
 }

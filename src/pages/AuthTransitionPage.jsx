@@ -12,6 +12,7 @@ function AuthTransitionPage() {
   const [error, setError] = useState('')
 
   const type = searchParams.get('type')
+  const reason = searchParams.get('reason')
   const redirect = useMemo(() => searchParams.get('redirect') || '/', [searchParams])
 
   useEffect(() => {
@@ -21,7 +22,7 @@ function AuthTransitionPage() {
       if (type === 'logout') {
         logout()
         timer = window.setTimeout(() => {
-          navigate('/login', { replace: true })
+          navigate(reason ? `/login?reason=${reason}` : '/login', { replace: true })
         }, 900)
         return
       }
@@ -44,7 +45,7 @@ function AuthTransitionPage() {
     return () => {
       if (timer) window.clearTimeout(timer)
     }
-  }, [type, redirect, navigate, logout])
+  }, [type, reason, redirect, navigate, logout])
 
   return (
     <Box className="flex min-h-screen flex-col items-center justify-center px-6 text-center">
