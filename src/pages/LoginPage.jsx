@@ -66,20 +66,26 @@ function LoginPage() {
     }
   }
 
-  async function handleSendCode() {
-    if (turnstileEnabled) {
-      if (!turnstileReady) {
-        const msg = '未配置 Turnstile Site Key，请先设置 TURNSTILE_SITE_KEY。'
-        setError(msg)
-        setToast({ open: true, message: msg, severity: 'error' })
-        return
-      }
-      setPendingAction('send-code')
-      setTurnstileSession((value) => value + 1)
-      setTurnstileOpen(true)
+  function requestTurnstile(action, proceed) {
+    if (!turnstileEnabled) {
+      proceed()
       return
     }
-    doSendCode()
+
+    if (!turnstileReady) {
+      const msg = '未配置 Turnstile Site Key，请先设置 TURNSTILE_SITE_KEY。'
+      setError(msg)
+      setToast({ open: true, message: msg, severity: 'error' })
+      return
+    }
+
+    setPendingAction(action)
+    setTurnstileSession((value) => value + 1)
+    setTurnstileOpen(true)
+  }
+
+  async function handleSendCode() {
+    requestTurnstile('send-code', () => doSendCode())
   }
 
   async function doLogin(turnstileToken) {
@@ -106,7 +112,7 @@ function LoginPage() {
 
   async function handleSubmit(event) {
     event.preventDefault()
-    doLogin()
+    requestTurnstile('login', () => doLogin())
   }
 
   function handleTurnstileVerified(token) {

@@ -22,7 +22,7 @@ export function AuthProvider({ children }) {
       return {
         ...payload,
         turnstileToken,
-        cf_turnstile_response: turnstileToken
+        'cf-turnstile-response': turnstileToken
       }
     }
 
