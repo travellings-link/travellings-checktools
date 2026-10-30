@@ -10,3 +10,10 @@ dist/
 .dev.vars*
 !.dev.vars.example
 !.env.example
+
+# workerd/miniflare 临时目录（见 vite.config.js）
+.tmp/
+
+# IDE 与本地工具目录
+.idea/
+.codegraph/

@@ -4,6 +4,12 @@ import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import TurnstileDialog from '../components/TurnstileDialog'
 
+const SESSION_END_MESSAGES = {
+  idle: '因长时间无操作，会话已自动登出。',
+  expired: '登录状态已过期，请重新登录。',
+  'other-tab': '账号已在其他标签页登出。'
+}
+
 function LoginPage() {
   const { login, sendCode, isAuthenticated } = useAuth()
   const navigate = useNavigate()
@@ -24,6 +30,7 @@ function LoginPage() {
   const [navigatingByLogin, setNavigatingByLogin] = useState(false)
 
   const redirect = new URLSearchParams(location.search).get('redirect') || '/'
+  const reason = new URLSearchParams(location.search).get('reason')
   const turnstileEnabledRaw = import.meta.env.TURNSTILE_ENABLED
   const turnstileSiteKey = import.meta.env.TURNSTILE_SITE_KEY || ''
   const turnstileVerifyMode = import.meta.env.TURNSTILE_VERIFY_MODE || 'frontend'
@@ -66,20 +73,26 @@ function LoginPage() {
     }
   }
 
-  async function handleSendCode() {
-    if (turnstileEnabled) {
-      if (!turnstileReady) {
-        const msg = '未配置 Turnstile Site Key，请先设置 TURNSTILE_SITE_KEY。'
-        setError(msg)
-        setToast({ open: true, message: msg, severity: 'error' })
-        return
-      }
-      setPendingAction('send-code')
-      setTurnstileSession((value) => value + 1)
-      setTurnstileOpen(true)
+  function requestTurnstile(action, proceed) {
+    if (!turnstileEnabled) {
+      proceed()
       return
     }
-    doSendCode()
+
+    if (!turnstileReady) {
+      const msg = '未配置 Turnstile Site Key，请先设置 TURNSTILE_SITE_KEY。'
+      setError(msg)
+      setToast({ open: true, message: msg, severity: 'error' })
+      return
+    }
+
+    setPendingAction(action)
+    setTurnstileSession((value) => value + 1)
+    setTurnstileOpen(true)
+  }
+
+  async function handleSendCode() {
+    requestTurnstile('send-code', () => doSendCode())
   }
 
   async function doLogin(turnstileToken) {
@@ -106,7 +119,7 @@ function LoginPage() {
 
   async function handleSubmit(event) {
     event.preventDefault()
-    doLogin()
+    requestTurnstile('login', () => doLogin())
   }
 
   function handleTurnstileVerified(token) {
@@ -149,6 +162,12 @@ function LoginPage() {
             <Typography variant="body2" color="text.secondary" className="mt-1">
               使用密码或验证码登录。
             </Typography>
+
+            {SESSION_END_MESSAGES[reason] ? (
+              <Alert severity="info" className="mt-4">
+                {SESSION_END_MESSAGES[reason]}
+              </Alert>
+            ) : null}
 
             <ToggleButtonGroup
               exclusive

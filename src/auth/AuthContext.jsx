@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import api from '../api/client'
+import { clearSessionMeta, ensureSessionExpiresAt, stampSessionExpiresAt } from './session'
 
 const AuthContext = createContext(null)
 
@@ -22,7 +23,7 @@ export function AuthProvider({ children }) {
       return {
         ...payload,
         turnstileToken,
-        cf_turnstile_response: turnstileToken
+        'cf-turnstile-response': turnstileToken
       }
     }
 
@@ -38,6 +39,7 @@ export function AuthProvider({ children }) {
     setUser(null)
     localStorage.removeItem('token')
     localStorage.removeItem('user')
+    clearSessionMeta()
   }, [])
 
   const fetchUser = useCallback(async () => {
@@ -70,6 +72,7 @@ export function AuthProvider({ children }) {
       setUser(payload.user)
       localStorage.setItem('token', payload.token)
       localStorage.setItem('user', JSON.stringify(payload.user))
+      stampSessionExpiresAt(payload.token)
       return true
     }
 
@@ -81,6 +84,10 @@ export function AuthProvider({ children }) {
     const response = await api.post('/auth/send-code', payload)
     return Boolean(response.data?.success)
   }, [])
+
+  useEffect(() => {
+    if (token) ensureSessionExpiresAt(token)
+  }, [token])
 
   useEffect(() => {
     async function bootstrap() {
