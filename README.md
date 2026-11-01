@@ -18,9 +18,30 @@
 | 参数名 | 定义 | 可用参数 |
 | ---- | ---- | ---- |
 | `API_BASE_URL` | 后端API地址 | 完整URL |
-| `TURNSTILE_ENABLED` | Trunstile人机验证开关 | Bool |
-| `TURNSTILE_SITE_KEY` | Trunstile站点密钥 | 密钥值 |
-| `TURNSTILE_VERIFY_MODE` | Trunstile验证模式 | 预留值，默认为 `frontend` |
+
+## 登录方式
+
+本前端不再提供账号密码 / 验证码登录，统一使用 **GitHub 第三方 SSO（OAuth 2.0 授权码流程）**，OAuth 全过程由后端完成：
+
+1. 登录页点击「使用 GitHub 登录」，整页跳转到 `{API_BASE_URL}/auth/github/login?redirect=<站内路径>`；
+2. 后端引导用户完成 GitHub 授权，成功后 302 回到 `{前端地址}/auth-transition?type=login&redirect=<站内路径>#token=<token>`；
+3. `/auth-transition` 从 URL fragment 取出 token 写入 `localStorage`（随后立即清掉地址栏里的 fragment），再通过 `GET /auth/me` 换取用户信息；
+4. 此后所有请求由 `src/api/client.js` 带上 `Authorization: Bearer <token>`，401 时自动回到登录页。
+
+> 前端不保存任何 GitHub 密钥；`GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` 只在后端配置。
+
+**本地联调**（后端跑在 `http://localhost:8080`）时，前端走 Vite 代理绕开跨域：
+
+```bash
+# 终端 1：后端（需先配好 config/application-local.properties 里的 GitHub 凭据与数据库）
+cd travellings-checktools-backend && ./gradlew bootRun
+
+# 终端 2：前端，代理指向本机后端
+DEV_API_TARGET=http://localhost:8080 npm run dev   # Windows PowerShell: $env:DEV_API_TARGET='http://localhost:8080'; npm run dev
+```
+
+此时 `.env.development.local` 里的 `API_BASE_URL=/api` 生效，`/api/*` 被代理到后端根路径（后端路由没有 `/api` 前缀）。
+后端 `FRONTEND_URL` 要写 `http://localhost:5174`（Vite dev 实际端口），否则登录回来会跳到错误地址。
 
 ## 部署与开发指南
 

@@ -4,6 +4,8 @@ import { clearSessionMeta, ensureSessionExpiresAt, stampSessionExpiresAt } from 
 
 const AuthContext = createContext(null)
 
+const API_BASE = import.meta.env.API_BASE_URL || 'https://api-check-tool.travellings.cn/api'
+
 function safeParseUser() {
   const raw = localStorage.getItem('user')
   if (!raw) return null
@@ -14,19 +16,14 @@ function safeParseUser() {
   }
 }
 
+// 只接受站内绝对路径：拒绝 //evil.com、/\\evil.com 这类协议相对地址，避免开放重定向。
+function toSafeRedirect(value) {
+  if (typeof value !== 'string' || !value) return '/'
+  if (!value.startsWith('/') || value.startsWith('//') || value.startsWith('/\\')) return '/'
+  return value
+}
+
 export function AuthProvider({ children }) {
-    const turnstileVerifyMode = import.meta.env.TURNSTILE_VERIFY_MODE || 'frontend'
-
-    function appendTurnstilePayload(payload, turnstileToken, verifyMode) {
-      if ((verifyMode || turnstileVerifyMode) !== 'backend') return payload
-      if (!turnstileToken) return payload
-      return {
-        ...payload,
-        turnstileToken,
-        'cf-turnstile-response': turnstileToken
-      }
-    }
-
   const [token, setToken] = useState(() => localStorage.getItem('token') || '')
   const [user, setUser] = useState(() => safeParseUser())
   const [loading, setLoading] = useState(false)
@@ -34,7 +31,7 @@ export function AuthProvider({ children }) {
   const isAuthenticated = Boolean(token)
   const isAdmin = user?.role === 1
 
-  const logout = useCallback(() => {
+  const clearLocalSession = useCallback(() => {
     setToken('')
     setUser(null)
     localStorage.removeItem('token')
@@ -42,14 +39,28 @@ export function AuthProvider({ children }) {
     clearSessionMeta()
   }, [])
 
+  // 先 fire-and-forget 通知后端注销，再清本地状态。
+  // 必须显式带上 Authorization：调用后立刻清掉 localStorage，等到 axios 请求拦截器执行时已取不到 token。
+  // 无 token 时跳过请求，否则后端 401 会触发 client.js 的全局跳转，把带 reason 的登出过渡页冲掉。
+  const logout = useCallback(() => {
+    const storedToken = localStorage.getItem('token')
+    if (storedToken) {
+      api
+        .post('/auth/logout', null, { headers: { Authorization: `Bearer ${storedToken}` } })
+        .catch(() => {})
+    }
+    clearLocalSession()
+  }, [clearLocalSession])
+
   const fetchUser = useCallback(async () => {
     try {
       const response = await api.get('/auth/me')
-      if (response.data?.success) {
+      if (response.data?.success && response.data.data) {
         setUser(response.data.data)
         localStorage.setItem('user', JSON.stringify(response.data.data))
         return true
       }
+      logout()
       return false
     } catch {
       logout()
@@ -57,33 +68,23 @@ export function AuthProvider({ children }) {
     }
   }, [logout])
 
-  const login = useCallback(async (email, password, code, options = {}) => {
-    const payload = appendTurnstilePayload({
-      email,
-      password,
-      code
-    }, options.turnstileToken, options.verifyMode)
-
-    const response = await api.post('/auth/login', payload)
-
-    if (response.data?.success) {
-      const payload = response.data.data
-      setToken(payload.token)
-      setUser(payload.user)
-      localStorage.setItem('token', payload.token)
-      localStorage.setItem('user', JSON.stringify(payload.user))
-      stampSessionExpiresAt(payload.token)
-      return true
-    }
-
-    return false
+  // GitHub SSO 由后端完成 OAuth 全过程，前端只负责整页跳转发起。
+  const startGithubLogin = useCallback((redirect = '/') => {
+    const target = toSafeRedirect(redirect)
+    window.location.assign(API_BASE + '/auth/github/login?redirect=' + encodeURIComponent(target))
   }, [])
 
-  const sendCode = useCallback(async (email, options = {}) => {
-    const payload = appendTurnstilePayload({ email }, options.turnstileToken, options.verifyMode)
-    const response = await api.post('/auth/send-code', payload)
-    return Boolean(response.data?.success)
-  }, [])
+  // 接收后端 302 回来的不透明 token：落库 + 计时 + 拉取用户信息。
+  const acceptToken = useCallback(async (rawToken) => {
+    const nextToken = typeof rawToken === 'string' ? rawToken.trim() : ''
+    if (!nextToken) return false
+
+    setToken(nextToken)
+    localStorage.setItem('token', nextToken)
+    stampSessionExpiresAt(nextToken)
+
+    return await fetchUser()
+  }, [fetchUser])
 
   useEffect(() => {
     if (token) ensureSessionExpiresAt(token)
@@ -107,12 +108,12 @@ export function AuthProvider({ children }) {
       loading,
       isAuthenticated,
       isAdmin,
-      login,
-      sendCode,
+      startGithubLogin,
+      acceptToken,
       fetchUser,
       logout
     }),
-    [token, user, loading, isAuthenticated, isAdmin, login, sendCode, fetchUser, logout]
+    [token, user, loading, isAuthenticated, isAdmin, startGithubLogin, acceptToken, fetchUser, logout]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
