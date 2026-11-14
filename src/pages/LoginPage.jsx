@@ -1,8 +1,8 @@
-import { Alert, Box, Button, Card, CardContent, Snackbar, TextField, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material'
-import { useEffect, useState } from 'react'
+import { Alert, Box, Button, Card, CardContent, Typography } from '@mui/material'
+import GitHubIcon from '@mui/icons-material/GitHub'
+import { useEffect } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
-import TurnstileDialog from '../components/TurnstileDialog'
 
 const SESSION_END_MESSAGES = {
   idle: '因长时间无操作，会话已自动登出。',
@@ -10,129 +10,35 @@ const SESSION_END_MESSAGES = {
   'other-tab': '账号已在其他标签页登出。'
 }
 
+const OAUTH_ERROR_MESSAGES = {
+  state_mismatch: '登录状态校验失败，请重新登录。',
+  oauth_failed: 'GitHub 授权失败，请重试。',
+  github_denied: '你已取消 GitHub 授权。'
+}
+
+// 只接受站内绝对路径：拒绝 //evil.com、/\\evil.com 这类协议相对地址，避免开放重定向。
+function toSafeRedirect(value) {
+  if (typeof value !== 'string' || !value) return '/'
+  if (!value.startsWith('/') || value.startsWith('//') || value.startsWith('/\\')) return '/'
+  return value
+}
+
 function LoginPage() {
-  const { login, sendCode, isAuthenticated } = useAuth()
+  const { startGithubLogin, isAuthenticated } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
 
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [code, setCode] = useState('')
-  const [loginMode, setLoginMode] = useState('password')
-  const [error, setError] = useState('')
-  const [submitting, setSubmitting] = useState(false)
-  const [sendingCode, setSendingCode] = useState(false)
-  const [countdown, setCountdown] = useState(0)
-  const [turnstileOpen, setTurnstileOpen] = useState(false)
-  const [pendingAction, setPendingAction] = useState(null)
-  const [turnstileSession, setTurnstileSession] = useState(0)
-  const [toast, setToast] = useState({ open: false, message: '', severity: 'success' })
-  const [navigatingByLogin, setNavigatingByLogin] = useState(false)
-
-  const redirect = new URLSearchParams(location.search).get('redirect') || '/'
-  const reason = new URLSearchParams(location.search).get('reason')
-  const turnstileEnabledRaw = import.meta.env.TURNSTILE_ENABLED
-  const turnstileSiteKey = import.meta.env.TURNSTILE_SITE_KEY || ''
-  const turnstileVerifyMode = import.meta.env.TURNSTILE_VERIFY_MODE || 'frontend'
-  const turnstileEnabled = turnstileEnabledRaw !== 'false'
-  const turnstileReady = turnstileEnabled && Boolean(turnstileSiteKey)
+  const searchParams = new URLSearchParams(location.search)
+  const redirect = toSafeRedirect(searchParams.get('redirect'))
+  const reason = searchParams.get('reason') || ''
+  const oauthError = searchParams.get('error') || ''
+  const errorMessage = oauthError ? OAUTH_ERROR_MESSAGES[oauthError] || '登录失败，请重试。' : ''
 
   useEffect(() => {
-    if (isAuthenticated && !navigatingByLogin) {
+    if (isAuthenticated) {
       navigate(redirect, { replace: true })
     }
-  }, [isAuthenticated, navigatingByLogin, navigate, redirect])
-
-  useEffect(() => {
-    if (!countdown) return
-    const timer = window.setTimeout(() => setCountdown((value) => value - 1), 1000)
-    return () => window.clearTimeout(timer)
-  }, [countdown])
-
-  async function doSendCode(turnstileToken) {
-    if (!email) {
-      setError('请先输入邮箱。')
-      return
-    }
-
-    setSendingCode(true)
-    setError('')
-    try {
-      await sendCode(email, {
-        turnstileToken,
-        verifyMode: turnstileVerifyMode
-      })
-      setCountdown(60)
-      setToast({ open: true, message: '验证码已发送，请注意查收。', severity: 'success' })
-    } catch (err) {
-      const msg = err.response?.data?.msg || '验证码发送失败，请稍后重试。'
-      setError(msg)
-      setToast({ open: true, message: msg, severity: 'error' })
-    } finally {
-      setSendingCode(false)
-    }
-  }
-
-  function requestTurnstile(action, proceed) {
-    if (!turnstileEnabled) {
-      proceed()
-      return
-    }
-
-    if (!turnstileReady) {
-      const msg = '未配置 Turnstile Site Key，请先设置 TURNSTILE_SITE_KEY。'
-      setError(msg)
-      setToast({ open: true, message: msg, severity: 'error' })
-      return
-    }
-
-    setPendingAction(action)
-    setTurnstileSession((value) => value + 1)
-    setTurnstileOpen(true)
-  }
-
-  async function handleSendCode() {
-    requestTurnstile('send-code', () => doSendCode())
-  }
-
-  async function doLogin(turnstileToken) {
-    setSubmitting(true)
-    setError('')
-
-    try {
-      const success = await login(email, useCode ? null : password, useCode ? code : null, {
-        turnstileToken,
-        verifyMode: turnstileVerifyMode
-      })
-      if (success) {
-        setNavigatingByLogin(true)
-        navigate(`/auth-transition?type=login&redirect=${encodeURIComponent(redirect)}`, { replace: true })
-      } else {
-        setError('登录失败，请检查账号信息。')
-      }
-    } catch (err) {
-      setError(err.response?.data?.msg || '登录失败，请稍后再试。')
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  async function handleSubmit(event) {
-    event.preventDefault()
-    requestTurnstile('login', () => doLogin())
-  }
-
-  function handleTurnstileVerified(token) {
-    setTurnstileOpen(false)
-    if (pendingAction === 'login') {
-      doLogin(token)
-    } else if (pendingAction === 'send-code') {
-      doSendCode(token)
-    }
-    setPendingAction(null)
-  }
-
-  const useCode = loginMode === 'code'
+  }, [isAuthenticated, navigate, redirect])
 
   return (
     <Box className="mx-auto flex min-h-screen w-full max-w-[1100px] items-center px-4 py-8 sm:px-6">
@@ -160,7 +66,7 @@ function LoginPage() {
               登录系统
             </Typography>
             <Typography variant="body2" color="text.secondary" className="mt-1">
-              使用密码或验证码登录。
+              使用 GitHub 账号登录。
             </Typography>
 
             {SESSION_END_MESSAGES[reason] ? (
@@ -169,100 +75,25 @@ function LoginPage() {
               </Alert>
             ) : null}
 
-            <ToggleButtonGroup
-              exclusive
-              value={loginMode}
-              onChange={(_, nextMode) => {
-                if (nextMode) setLoginMode(nextMode)
-              }}
-              size="small"
+            {errorMessage ? (
+              <Alert severity="error" className="mt-4">
+                {errorMessage}
+              </Alert>
+            ) : null}
+
+            <Button
               fullWidth
-              className="mt-4"
+              variant="contained"
+              size="large"
+              startIcon={<GitHubIcon />}
+              className="mt-6 h-11"
+              onClick={() => startGithubLogin(redirect)}
             >
-              <ToggleButton value="password">密码登录</ToggleButton>
-              <ToggleButton value="code">验证码登录</ToggleButton>
-            </ToggleButtonGroup>
-
-            <Box component="form" className="mt-6 space-y-4" onSubmit={handleSubmit}>
-              <TextField
-                fullWidth
-                label="邮箱"
-                type="email"
-                autoComplete="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                required
-              />
-
-              {!useCode ? (
-                <TextField
-                  fullWidth
-                  label="密码"
-                  type="password"
-                  autoComplete="current-password"
-                  value={password}
-                  onChange={(event) => setPassword(event.target.value)}
-                  required
-                />
-              ) : (
-                <Box className="flex items-start gap-2">
-                  <TextField
-                    fullWidth
-                    label="验证码"
-                    value={code}
-                    onChange={(event) => setCode(event.target.value)}
-                    required
-                  />
-                  <Button
-                    type="button"
-                    variant="outlined"
-                    onClick={handleSendCode}
-                    disabled={sendingCode || countdown > 0 || !email}
-                    className="min-h-14 min-w-28 whitespace-nowrap"
-                  >
-                    {countdown > 0 ? `${countdown}s 后可重发` : '发送验证码'}
-                  </Button>
-                </Box>
-              )}
-
-              {error ? <Alert severity="error">{error}</Alert> : null}
-
-              <Button
-                type="submit"
-                fullWidth
-                variant="contained"
-                disabled={submitting || !email || (!useCode && !password) || (useCode && !code)}
-                className="h-11"
-              >
-                {submitting ? '登录中...' : '登录'}
-              </Button>
-
-            </Box>
+              使用 GitHub 登录
+            </Button>
           </CardContent>
         </Card>
       </Box>
-
-      <TurnstileDialog
-        key={turnstileSession}
-        open={turnstileOpen}
-        siteKey={turnstileSiteKey}
-        action={pendingAction === 'send-code' ? 'send_code' : 'login'}
-        onVerified={handleTurnstileVerified}
-        onCancel={() => {
-          setTurnstileOpen(false)
-          setPendingAction(null)
-        }}
-      />
-
-      <Snackbar
-        open={toast.open}
-        autoHideDuration={2200}
-        onClose={() => setToast((prev) => ({ ...prev, open: false }))}
-      >
-        <Alert severity={toast.severity} variant="filled" onClose={() => setToast((prev) => ({ ...prev, open: false }))}>
-          {toast.message}
-        </Alert>
-      </Snackbar>
     </Box>
   )
 }

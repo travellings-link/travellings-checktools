@@ -9,7 +9,7 @@ import { useProjectTmpDir } from './scripts/tmp-dir.mjs'
 useProjectTmpDir()
 
 export default defineConfig({
-  envPrefix: ['API_', 'TURNSTILE_'],
+  envPrefix: ['API_'],
   plugins: [react(), tailwindcss(), cloudflare()],
   server: {
     port: 5174,
@@ -19,8 +19,10 @@ export default defineConfig({
       deny: ['.env', '.env.*', '*.{crt,pem}', '.tmp', '**/.tmp/**']
     },
     proxy: {
+      // 默认代理到线上 API；本地起后端时用 DEV_API_TARGET=http://localhost:8080 npm run dev
+      // 后端路由没有 /api 前缀，因此这里 rewrite 掉前缀，target 只写 schema+host
       '/api': {
-        target: 'https://api-check-tool.travellings.cn/api',
+        target: process.env.DEV_API_TARGET || 'https://api-check-tool.travellings.cn/api',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, '')
       }
