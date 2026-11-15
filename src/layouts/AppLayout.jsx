@@ -18,42 +18,33 @@ import FactCheckRoundedIcon from '@mui/icons-material/FactCheckRounded'
 import MenuRoundedIcon from '@mui/icons-material/MenuRounded'
 import PeopleRoundedIcon from '@mui/icons-material/PeopleRounded'
 import ReceiptLongRoundedIcon from '@mui/icons-material/ReceiptLongRounded'
-import SummarizeRoundedIcon from '@mui/icons-material/SummarizeRounded'
-import md5 from 'md5'
-import { useEffect, useMemo, useState } from 'react'
+import ReportProblemRoundedIcon from '@mui/icons-material/ReportProblemRounded'
+import { useMemo, useState } from 'react'
 import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../auth/AuthContext'
 import SessionGuard from '../components/SessionGuard'
+import { githubAvatar } from '../utils/avatar'
 
 const drawerWidth = 260
 const appBarHeight = 64 // 与 theme.mixins.toolbar 默认高度一致
 
 function AppLayout() {
   const [mobileOpen, setMobileOpen] = useState(false)
-  const [avatarUrl, setAvatarUrl] = useState('')
   const location = useLocation()
   const navigate = useNavigate()
   const { user, isAdmin } = useAuth()
 
-  useEffect(() => {
-    const email = (user?.email || '').trim().toLowerCase()
-    if (!email) {
-      setAvatarUrl('')
-      return
-    }
-    const emailHash = md5(email)
-    setAvatarUrl(`https://cravatar.cn/avatar/${emailHash}?s=80&d=identicon`)
-  }, [user?.email])
+  const displayName = user?.name || ''
 
   const navItems = useMemo(() => {
     const items = [
       { label: '仪表盘', path: '/', icon: <DashboardRoundedIcon /> },
       { label: '巡查任务', path: '/check', icon: <FactCheckRoundedIcon /> },
-      { label: '巡查记录', path: '/records', icon: <ReceiptLongRoundedIcon /> },
-      { label: '提交报告', path: '/reports', icon: <SummarizeRoundedIcon /> }
+      { label: '操作日志', path: '/records', icon: <ReceiptLongRoundedIcon /> }
     ]
     if (isAdmin) {
-      items.push({ label: '用户管理', path: '/users', icon: <PeopleRoundedIcon /> })
+      items.push({ label: '异常管理', path: '/manage', icon: <ReportProblemRoundedIcon /> })
+      items.push({ label: '用户列表', path: '/users', icon: <PeopleRoundedIcon /> })
     }
     return items
   }, [isAdmin])
@@ -127,18 +118,19 @@ function AppLayout() {
           </Box>
           <Box className="ml-auto flex items-center gap-2">
             <Avatar
-              src={avatarUrl || undefined}
+              src={githubAvatar(displayName)}
               className="h-8 w-8 text-sm"
               sx={{ bgcolor: '#CEB0A1' }}
             >
-              {(user?.email || 'U').slice(0, 1).toUpperCase()}
+              {(displayName || 'U').slice(0, 1).toUpperCase()}
             </Avatar>
             <Typography
               variant="body2"
               color="text.secondary"
               className="hidden sm:block"
             >
-              {user?.email || '未登录'}
+              {displayName || '未登录'}
+              {isAdmin ? '（维护组）' : ''}
             </Typography>
           </Box>
         </Toolbar>

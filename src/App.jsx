@@ -5,9 +5,9 @@ import CheckPage from './pages/CheckPage'
 import DashboardPage from './pages/DashboardPage'
 import AuthTransitionPage from './pages/AuthTransitionPage'
 import LoginPage from './pages/LoginPage'
+import ManagePage from './pages/ManagePage'
 import NotFoundPage from './pages/NotFoundPage'
 import RecordsPage from './pages/RecordsPage'
-import ReportsPage from './pages/ReportsPage'
 import UsersPage from './pages/UsersPage'
 
 function App() {
@@ -26,7 +26,14 @@ function App() {
         <Route index element={<DashboardPage />} />
         <Route path="check" element={<CheckPage />} />
         <Route path="records" element={<RecordsPage />} />
-        <Route path="reports" element={<ReportsPage />} />
+        <Route
+          path="manage"
+          element={
+            <RequireAdmin>
+              <ManagePage />
+            </RequireAdmin>
+          }
+        />
         <Route
           path="users"
           element={
@@ -35,6 +42,8 @@ function App() {
             </RequireAdmin>
           }
         />
+        {/* 后端没有报告功能，旧书签统一回到首页 */}
+        <Route path="reports" element={<Navigate to="/" replace />} />
       </Route>
       <Route path="/dashboard" element={<Navigate to="/" replace />} />
       <Route path="*" element={<NotFoundPage />} />
