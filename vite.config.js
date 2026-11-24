@@ -25,6 +25,12 @@ export default defineConfig({
         target: process.env.DEV_API_TARGET || 'https://api-check-tool.travellings.cn/api',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, '')
+      },
+      // 隔离 Travellings 主 API：避免复用 check-tool 客户端而泄露 Bearer Token。
+      '/travellings-api': {
+        target: process.env.DEV_TRAVELLINGS_API_TARGET || 'https://api.travellings.cn',
+        changeOrigin: true,
+        rewrite: (path) => path.replace(/^\/travellings-api/, '')
       }
     }
   }
