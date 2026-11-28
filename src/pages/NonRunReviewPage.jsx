@@ -16,6 +16,7 @@ import {
   MenuItem,
   Select,
   Snackbar,
+  Stack,
   Table,
   TableBody,
   TableCell,
@@ -28,10 +29,14 @@ import {
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { errorMessage } from '../api/client'
 import {
-  fetchRemovalMarks,
-  markRemoval,
+  fetchVerdicts,
   NON_RUN_REMOVAL_REASONS,
-  OTHER_REASON
+  OTHER_REASON,
+  submitVerdict,
+  VERDICT_ABNORMAL,
+  VERDICT_DELETE,
+  VERDICT_KEEP,
+  VERDICT_LABEL
 } from '../api/nonRunRemovals'
 import { fetchReviewSites, safeSiteUrl, SITE_STATUS_OPTIONS } from '../api/travellings'
 
@@ -39,20 +44,51 @@ import { fetchReviewSites, safeSiteUrl, SITE_STATUS_OPTIONS } from '../api/trave
 const SNAPSHOT_DATE = '2026-11-28'
 const STATUS_LABEL = new Map(SITE_STATUS_OPTIONS.map((option) => [option.value, option.label]))
 
+const VERDICT_COLOR = {
+  [VERDICT_KEEP]: 'success',
+  [VERDICT_ABNORMAL]: 'info',
+  [VERDICT_DELETE]: 'warning'
+}
+
+const SCOPE_OPTIONS = [
+  { value: 'pending', label: '待判定' },
+  { value: 'done', label: '已判定' },
+  { value: 'all', label: '全部' }
+]
+
 function statusLabel(status) {
   const label = STATUS_LABEL.get(status)
   return label && label !== status ? status + '（' + label + '）' : status || '—'
 }
 
+function verdictLabel(record) {
+  if (!record) return '—'
+  const base = VERDICT_LABEL[record.verdict] || record.verdict
+  return record.verdict === VERDICT_DELETE && record.reason ? base + '：' + record.reason : base
+}
+
 function toCsv(rows) {
-  const header = ['站点ID', '站点名称', '网址', '状态', '删除原因', '补充说明', '操作人', '标记时间']
+  const header = ['站点ID', '站点名称', '网址', '状态', '判定', '删除原因', '补充说明', '操作人', '判定时间']
   const cell = (value) => {
     let text = String(value ?? '')
     // 防 CSV 公式注入：Excel 会把 = + - @ 开头的单元格当公式执行
     if (/^[=+\-@]/.test(text)) text = "'" + text
     return '"' + text.replace(/"/g, '""') + '"'
   }
-  const lines = [header, ...rows.map((row) => [row.siteId, row.name, row.url, row.status, row.reason, row.detail, row.operator, row.createdAt])]
+  const lines = [
+    header,
+    ...rows.map((row) => [
+      row.siteId,
+      row.name,
+      row.url,
+      row.status,
+      row.verdict,
+      row.reason,
+      row.detail,
+      row.operator,
+      row.createdAt
+    ])
+  ]
   return '\ufeff' + lines.map((line) => line.map(cell).join(',')).join('\r\n')
 }
 
@@ -61,7 +97,7 @@ function downloadCsv(rows) {
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = url
-  anchor.download = '非RUN站点待删除台账_' + SNAPSHOT_DATE + '.csv'
+  anchor.download = '非RUN站点判定台账_' + SNAPSHOT_DATE + '.csv'
   document.body.appendChild(anchor)
   anchor.click()
   anchor.remove()
@@ -70,13 +106,15 @@ function downloadCsv(rows) {
 
 function NonRunReviewPage() {
   const [sites, setSites] = useState([])
-  const [marks, setMarks] = useState([])
+  const [verdicts, setVerdicts] = useState([])
   const [loading, setLoading] = useState(false)
+  const [scope, setScope] = useState('pending')
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [page, setPage] = useState(0)
   const [rowsPerPage, setRowsPerPage] = useState(20)
   const [target, setTarget] = useState(null)
+  const [verdict, setVerdict] = useState(VERDICT_KEEP)
   const [reason, setReason] = useState(NON_RUN_REMOVAL_REASONS[0])
   const [detail, setDetail] = useState('')
   const [saving, setSaving] = useState(false)
@@ -89,9 +127,9 @@ function NonRunReviewPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [siteList, markList] = await Promise.all([fetchReviewSites(), fetchRemovalMarks()])
+      const [siteList, verdictList] = await Promise.all([fetchReviewSites(), fetchVerdicts()])
       setSites(siteList)
-      setMarks(markList)
+      setVerdicts(verdictList)
     } catch (error) {
       showToast(errorMessage(error, '获取非 RUN 站点列表失败'), 'error')
     } finally {
@@ -103,18 +141,22 @@ function NonRunReviewPage() {
     load()
   }, [load])
 
-  // 同一站点可能被多次标记（更正原因），列表上只显示最近一次
-  const latestMark = useMemo(() => {
+  // 同一站点可能被改判多次（台账只追加），列表上只显示最近一次
+  const latestVerdict = useMemo(() => {
     const map = new Map()
-    for (const mark of marks) {
-      if (!map.has(mark.siteId)) map.set(mark.siteId, mark)
+    for (const record of verdicts) {
+      if (!map.has(record.siteId)) map.set(record.siteId, record)
     }
     return map
-  }, [marks])
+  }, [verdicts])
 
   const filtered = useMemo(() => {
     const keyword = search.trim().toLowerCase()
     return sites.filter((site) => {
+      const judged = latestVerdict.has(site.id)
+      // 判定过的站点不再进入待判定队列，避免重复核对
+      if (scope === 'pending' && judged) return false
+      if (scope === 'done' && !judged) return false
       if (statusFilter && site.status !== statusFilter) return false
       if (!keyword) return true
       return (
@@ -123,43 +165,51 @@ function NonRunReviewPage() {
         String(site.id).includes(keyword)
       )
     })
-  }, [sites, search, statusFilter])
+  }, [sites, latestVerdict, scope, search, statusFilter])
 
   const visible = useMemo(
     () => filtered.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage),
     [filtered, page, rowsPerPage]
   )
 
-  const openDialog = (site) => {
-    const existing = latestMark.get(site.id)
+  const openDialog = (site, presetVerdict) => {
+    const existing = latestVerdict.get(site.id)
     setTarget(site)
-    setReason(existing?.reason && NON_RUN_REMOVAL_REASONS.includes(existing.reason) ? existing.reason : NON_RUN_REMOVAL_REASONS[0])
+    setVerdict(presetVerdict || existing?.verdict || VERDICT_KEEP)
+    setReason(
+      existing?.reason && NON_RUN_REMOVAL_REASONS.includes(existing.reason)
+        ? existing.reason
+        : NON_RUN_REMOVAL_REASONS[0]
+    )
     setDetail(existing?.detail || '')
   }
 
   const submit = async () => {
     if (!target || saving) return
     const trimmedDetail = detail.trim()
-    if (reason === OTHER_REASON && !trimmedDetail) {
-      showToast('选择「其他」时必须填写具体原因', 'warning')
-      return
+    if (verdict === VERDICT_DELETE) {
+      if (reason === OTHER_REASON && !trimmedDetail) {
+        showToast('选择「其他」时必须填写具体原因', 'warning')
+        return
+      }
     }
 
     setSaving(true)
     try {
-      const record = await markRemoval({
+      const record = await submitVerdict({
         siteId: target.id,
         name: target.name || '',
         url: target.url || '',
         status: target.status || null,
-        reason,
+        verdict,
+        reason: verdict === VERDICT_DELETE ? reason : null,
         detail: trimmedDetail || null
       })
-      if (record) setMarks((list) => [record, ...list])
+      if (record) setVerdicts((list) => [record, ...list])
       setTarget(null)
-      showToast('已标记待删除：' + (target.name || 'ID ' + target.id))
+      showToast('已记录判定：' + (target.name || 'ID ' + target.id) + ' → ' + verdictLabel(record))
     } catch (error) {
-      showToast(errorMessage(error, '标记待删除失败'), 'error')
+      showToast(errorMessage(error, '提交判定失败'), 'error')
     } finally {
       setSaving(false)
     }
@@ -171,6 +221,11 @@ function NonRunReviewPage() {
     return [...counts.entries()].sort((a, b) => b[1] - a[1])
   }, [sites])
 
+  const judgedCount = useMemo(
+    () => sites.filter((site) => latestVerdict.has(site.id)).length,
+    [sites, latestVerdict]
+  )
+
   return (
     <Box className="mx-auto max-w-6xl">
       <Box className="flex flex-wrap items-end justify-between gap-3">
@@ -179,7 +234,7 @@ function NonRunReviewPage() {
             规则修订专题 · 非 RUN 倒查
           </Typography>
           <Typography color="text.secondary" className="mt-1">
-            核对截止 {SNAPSHOT_DATE} 成员列表中状态非 RUN 的站点（含 WAIT），确认是否确实不符合要求并标记待删除。
+            逐条核对截止 {SNAPSHOT_DATE} 成员列表中状态非 RUN 的站点（含 WAIT），判定其是否符合成员规则。
           </Typography>
         </Box>
         <Box className="flex gap-2">
@@ -189,25 +244,43 @@ function NonRunReviewPage() {
           <Button
             variant="contained"
             onClick={() => {
-              if (marks.length === 0) {
-                showToast('还没有任何标记记录，暂无可导出的台账', 'warning')
+              if (verdicts.length === 0) {
+                showToast('还没有任何判定记录，暂无可导出的台账', 'warning')
                 return
               }
-              downloadCsv(marks)
+              downloadCsv(verdicts)
             }}
           >
-            导出台账 CSV（{marks.length}）
+            导出台账 CSV（{verdicts.length}）
           </Button>
         </Box>
       </Box>
 
       <Alert severity="info" className="mt-5">
-        标记只登记，不会直接删除上游站点；真正删除由专题结束后统一执行。所有标记（含更正原因）都会保留在台账里并可导出为 CSV 公示。
+        判定只登记，不会修改上游站点状态、也不会真正删除；实际处理由专题结束后统一执行。每次判定（含改判）都追加到台账并可导出 CSV 公示。
       </Alert>
 
       <Card className="mt-4 rounded-2xl">
         <CardContent>
           <Box className="flex flex-wrap items-center gap-3">
+            <FormControl size="small" className="min-w-[140px]">
+              <InputLabel id="non-run-scope-label">范围</InputLabel>
+              <Select
+                labelId="non-run-scope-label"
+                label="范围"
+                value={scope}
+                onChange={(event) => {
+                  setScope(event.target.value)
+                  setPage(0)
+                }}
+              >
+                {SCOPE_OPTIONS.map((option) => (
+                  <MenuItem key={option.value} value={option.value}>
+                    {option.label}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
             <TextField
               size="small"
               label="按名称 / 网址 / ID 筛选"
@@ -216,9 +289,9 @@ function NonRunReviewPage() {
                 setSearch(event.target.value)
                 setPage(0)
               }}
-              className="min-w-[240px] flex-1"
+              className="min-w-[220px] flex-1"
             />
-            <FormControl size="small" className="min-w-[180px]">
+            <FormControl size="small" className="min-w-[170px]">
               <InputLabel id="non-run-status-label">状态</InputLabel>
               <Select
                 labelId="non-run-status-label"
@@ -241,8 +314,9 @@ function NonRunReviewPage() {
 
           <Box className="mt-3 flex flex-wrap gap-2">
             <Chip size="small" label={'非 RUN 站点 ' + sites.length} />
+            <Chip size="small" color="success" label={'已判定 ' + judgedCount} />
+            <Chip size="small" label={'剩余待判定 ' + (sites.length - judgedCount)} />
             <Chip size="small" label={'当前筛选 ' + filtered.length} />
-            <Chip size="small" color="warning" label={'已标记待删除 ' + latestMark.size} />
           </Box>
 
           {loading && sites.length === 0 ? (
@@ -251,7 +325,9 @@ function NonRunReviewPage() {
             </Box>
           ) : filtered.length === 0 ? (
             <Typography color="text.secondary" className="py-10 text-center">
-              没有符合条件的非 RUN 站点。
+              {scope === 'pending' && sites.length > 0
+                ? '全部非 RUN 站点都已完成判定，切到「已判定」可复核结果。'
+                : '没有符合条件的站点。'}
             </Typography>
           ) : (
             <Box className="mt-4 overflow-x-auto">
@@ -262,12 +338,13 @@ function NonRunReviewPage() {
                     <TableCell>站点</TableCell>
                     <TableCell>状态</TableCell>
                     <TableCell>巡查备注</TableCell>
-                    <TableCell>处理</TableCell>
+                    <TableCell>判定</TableCell>
+                    <TableCell>操作</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
                   {visible.map((site) => {
-                    const marked = latestMark.get(site.id)
+                    const record = latestVerdict.get(site.id)
                     let href = null
                     try {
                       href = site.url ? safeSiteUrl(site.url) : null
@@ -300,22 +377,41 @@ function NonRunReviewPage() {
                           </Typography>
                         </TableCell>
                         <TableCell>
-                          {marked ? (
+                          {record ? (
                             <Box className="flex flex-col gap-1">
-                              <Chip size="small" color="warning" label={'待删除：' + marked.reason} />
-                              {marked.detail ? (
+                              <Chip size="small" color={VERDICT_COLOR[record.verdict] || 'default'} label={verdictLabel(record)} />
+                              {record.detail ? (
                                 <Typography variant="caption" color="text.secondary">
-                                  {marked.detail}
+                                  {record.detail}
                                 </Typography>
                               ) : null}
-                              <Button size="small" onClick={() => openDialog(site)}>
-                                更正原因
-                              </Button>
+                              <Typography variant="caption" color="text.secondary">
+                                {record.operator} · {record.createdAt}
+                              </Typography>
                             </Box>
                           ) : (
-                            <Button size="small" color="error" onClick={() => openDialog(site)}>
-                              标记待删除
+                            <Typography variant="caption" color="text.secondary">
+                              未判定
+                            </Typography>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {record ? (
+                            <Button size="small" onClick={() => openDialog(site)}>
+                              改判
                             </Button>
+                          ) : (
+                            <Stack direction="row" spacing={1}>
+                              <Button size="small" color="success" onClick={() => openDialog(site, VERDICT_KEEP)}>
+                                符合规则
+                              </Button>
+                              <Button size="small" color="info" onClick={() => openDialog(site, VERDICT_ABNORMAL)}>
+                                标记异常
+                              </Button>
+                              <Button size="small" color="error" onClick={() => openDialog(site, VERDICT_DELETE)}>
+                                标记待删除
+                              </Button>
+                            </Stack>
                           )}
                         </TableCell>
                       </TableRow>
@@ -343,45 +439,75 @@ function NonRunReviewPage() {
       </Card>
 
       <Dialog open={Boolean(target)} onClose={() => (saving ? null : setTarget(null))} fullWidth maxWidth="sm">
-        <DialogTitle>标记待删除</DialogTitle>
+        <DialogTitle>提交判定</DialogTitle>
         <DialogContent>
           <Typography variant="body2" color="text.secondary" className="mt-1">
             {target?.name || ''}（ID {target?.id}）
           </Typography>
           <FormControl fullWidth size="small" className="mt-4">
-            <InputLabel id="non-run-reason-label">删除原因</InputLabel>
+            <InputLabel id="non-run-verdict-label">判定结果</InputLabel>
             <Select
-              labelId="non-run-reason-label"
-              label="删除原因"
-              value={reason}
-              onChange={(event) => setReason(event.target.value)}
+              labelId="non-run-verdict-label"
+              label="判定结果"
+              value={verdict}
+              onChange={(event) => setVerdict(event.target.value)}
             >
-              {NON_RUN_REMOVAL_REASONS.map((option) => (
-                <MenuItem key={option} value={option}>
-                  {option}
-                </MenuItem>
-              ))}
+              <MenuItem value={VERDICT_KEEP}>{VERDICT_LABEL[VERDICT_KEEP]}</MenuItem>
+              <MenuItem value={VERDICT_ABNORMAL}>{VERDICT_LABEL[VERDICT_ABNORMAL]}</MenuItem>
+              <MenuItem value={VERDICT_DELETE}>{VERDICT_LABEL[VERDICT_DELETE]}</MenuItem>
             </Select>
           </FormControl>
+          {verdict === VERDICT_DELETE ? (
+            <FormControl fullWidth size="small" className="mt-4">
+              <InputLabel id="non-run-reason-label">删除原因</InputLabel>
+              <Select
+                labelId="non-run-reason-label"
+                label="删除原因"
+                value={reason}
+                onChange={(event) => setReason(event.target.value)}
+              >
+                {NON_RUN_REMOVAL_REASONS.map((option) => (
+                  <MenuItem key={option} value={option}>
+                    {option}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          ) : null}
           <TextField
             fullWidth
             size="small"
             className="mt-4"
-            label={reason === OTHER_REASON ? '具体原因（必填）' : '补充说明（选填）'}
+            label={
+              verdict === VERDICT_DELETE && reason === OTHER_REASON
+                ? '具体原因（必填）'
+                : verdict === VERDICT_ABNORMAL
+                  ? '异常说明（选填）'
+                  : '补充说明（选填）'
+            }
             value={detail}
             onChange={(event) => setDetail(event.target.value)}
             multiline
             minRows={2}
-            required={reason === OTHER_REASON}
-            helperText={reason === OTHER_REASON ? '选择「其他」时必须说明具体原因，公示时一并展示。' : '可留空。'}
+            required={verdict === VERDICT_DELETE && reason === OTHER_REASON}
+            helperText={
+              verdict === VERDICT_DELETE && reason === OTHER_REASON
+                ? '选择「其他」时必须说明具体原因，公示时一并展示。'
+                : '可留空。'
+            }
           />
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setTarget(null)} disabled={saving}>
             取消
           </Button>
-          <Button variant="contained" color="error" onClick={submit} disabled={saving}>
-            {saving ? '提交中…' : '确认标记'}
+          <Button
+            variant="contained"
+            color={verdict === VERDICT_DELETE ? 'error' : 'primary'}
+            onClick={submit}
+            disabled={saving}
+          >
+            {saving ? '提交中…' : '确认判定'}
           </Button>
         </DialogActions>
       </Dialog>
