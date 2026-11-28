@@ -145,7 +145,7 @@ function NonRunReviewPage({ kind = 'nonrun' }) {
   const [verdict, setVerdict] = useState(VERDICT_KEEP)
   const [reason, setReason] = useState(NON_RUN_REMOVAL_REASONS[0])
   const [detail, setDetail] = useState('')
-  const [confirmName, setConfirmName] = useState('')
+
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState({ open: false, message: '', severity: 'success' })
 
@@ -223,11 +223,6 @@ function NonRunReviewPage({ kind = 'nonrun' }) {
     if (verdict === VERDICT_DELETE) {
       if (reason === OTHER_REASON && !trimmedDetail) {
         showToast('选择「其他」时必须填写具体原因', 'warning')
-        return
-      }
-      // 上游删除不可逆，要求输入站点名确认是本人有意为之
-      if (confirmName.trim() !== (target.name || '').trim()) {
-        showToast('请输入站点名称以确认删除', 'warning')
         return
       }
     }
@@ -715,17 +710,6 @@ function NonRunReviewPage({ kind = 'nonrun' }) {
                 : '可留空。'
             }
           />
-          {verdict === VERDICT_DELETE ? (
-            <TextField
-              fullWidth
-              size="small"
-              className="mt-4"
-              label="输入站点名称以确认删除"
-              value={confirmName}
-              onChange={(event) => setConfirmName(event.target.value)}
-              helperText="删除上游站点后无法恢复，请确认是本人有意为之。"
-            />
-          ) : null}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setTarget(null)} disabled={saving}>
@@ -735,7 +719,7 @@ function NonRunReviewPage({ kind = 'nonrun' }) {
             variant="contained"
             color={verdict === VERDICT_DELETE ? 'error' : 'primary'}
             onClick={submit}
-            disabled={saving || (verdict === VERDICT_DELETE && confirmName.trim() !== (target?.name || '').trim())}
+            disabled={saving}
           >
             {saving ? '提交中…' : verdict === VERDICT_DELETE ? '确认删除' : '确认判定'}
           </Button>
