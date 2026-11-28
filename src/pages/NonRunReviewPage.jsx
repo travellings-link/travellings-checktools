@@ -35,6 +35,8 @@ import {
   NON_RUN_REMOVAL_REASONS,
   OTHER_REASON,
   submitVerdict,
+  TOPIC_NONRUN,
+  TOPIC_RUN,
   VERDICT_ABNORMAL,
   VERDICT_DELETE,
   VERDICT_KEEP,
@@ -110,6 +112,7 @@ function downloadCsv(rows, prefix) {
 // RUN 版复用同一套三态判定与台账接口，只是清单来源相反。
 const PAGE_CONFIG = {
   nonrun: {
+    topic: TOPIC_NONRUN,
     title: '规则修订专题 · 非 RUN 倒查',
     intro: '逐条核对截止 ' + SNAPSHOT_DATE + ' 成员列表中状态非 RUN 的站点（含 WAIT），判定其是否符合成员规则。',
     emptyAll: '全部非 RUN 站点都已完成判定，切到「已判定」可复核结果。',
@@ -117,6 +120,7 @@ const PAGE_CONFIG = {
     csvName: '非RUN站点判定台账_'
   },
   run: {
+    topic: TOPIC_RUN,
     title: '规则修订专题 · RUN 站点倒查',
     intro: '逐条复核截止 ' + SNAPSHOT_DATE + ' 成员列表中状态为 RUN 的站点，确认其是否仍符合成员规则。',
     emptyAll: '全部 RUN 站点都已完成判定，切到「已判定」可复核结果。',
@@ -152,7 +156,10 @@ function NonRunReviewPage({ kind = 'nonrun' }) {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [siteList, verdictList] = await Promise.all([fetchReviewSites(config.fetchOptions), fetchVerdicts()])
+      const [siteList, verdictList] = await Promise.all([
+        fetchReviewSites(config.fetchOptions),
+        fetchVerdicts(config.topic)
+      ])
       setSites(siteList)
       setVerdicts(verdictList)
     } catch (error) {
@@ -228,6 +235,7 @@ function NonRunReviewPage({ kind = 'nonrun' }) {
     setSaving(true)
     try {
       const record = await submitVerdict({
+        topic: config.topic,
         siteId: target.id,
         name: target.name || '',
         url: target.url || '',
@@ -260,6 +268,7 @@ function NonRunReviewPage({ kind = 'nonrun' }) {
     setSaving(true)
     try {
       const record = await submitVerdict({
+        topic: config.topic,
         siteId: site.id,
         name: site.name || '',
         url: site.url || '',
