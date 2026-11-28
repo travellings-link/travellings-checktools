@@ -15,7 +15,7 @@ export const VERDICT_LABEL = {
   [VERDICT_DELETE]: '删除'
 }
 
-export const NON_RUN_REMOVAL_REASONS = ['域名易主', '网站不可访问', 'AI内容过多', '其他']
+export const NON_RUN_REMOVAL_REASONS = ['域名易主', '网站不可访问', 'AI内容过多', '无法找到「开往」外链', '其他']
 export const OTHER_REASON = '其他'
 
 // 两个专题共用同一张台账表，靠 topic 隔离：不带 topic 会读不到数据
