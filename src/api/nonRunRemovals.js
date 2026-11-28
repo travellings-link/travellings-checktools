@@ -9,7 +9,7 @@ export const VERDICT_DELETE = 'DELETE'
 export const VERDICT_LABEL = {
   [VERDICT_KEEP]: '符合规则',
   [VERDICT_ABNORMAL]: '异常待定',
-  [VERDICT_DELETE]: '待删除'
+  [VERDICT_DELETE]: '删除'
 }
 
 export const NON_RUN_REMOVAL_REASONS = ['域名易主', '网站不可访问', 'AI内容过多', '其他']

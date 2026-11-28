@@ -11,7 +11,9 @@ import {
   DialogContent,
   DialogTitle,
   FormControl,
+  Divider,
   InputLabel,
+  LinearProgress,
   Link,
   MenuItem,
   Select,
@@ -108,6 +110,8 @@ function NonRunReviewPage() {
   const [sites, setSites] = useState([])
   const [verdicts, setVerdicts] = useState([])
   const [loading, setLoading] = useState(false)
+  const [mode, setMode] = useState('list')
+  const [workbenchIndex, setWorkbenchIndex] = useState(0)
   const [scope, setScope] = useState('pending')
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
@@ -226,6 +230,33 @@ function NonRunReviewPage() {
     }
   }
 
+  // 工作台里「符合规则 / 标记异常」直接提交；「删除」必须走弹窗补原因与二次确认
+  const judgeQuick = async (site, nextVerdict) => {
+    if (!site || saving) return
+    if (nextVerdict === VERDICT_DELETE) {
+      openDialog(site, VERDICT_DELETE)
+      return
+    }
+    setSaving(true)
+    try {
+      const record = await submitVerdict({
+        siteId: site.id,
+        name: site.name || '',
+        url: site.url || '',
+        status: site.status || null,
+        verdict: nextVerdict,
+        reason: null,
+        detail: null
+      })
+      if (record) setVerdicts((list) => [record, ...list])
+      showToast('已同步上游并记录判定：' + (site.name || 'ID ' + site.id) + ' → ' + verdictLabel(record))
+    } catch (error) {
+      showToast(errorMessage(error, '提交判定失败'), 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
   const statusOptions = useMemo(() => {
     const counts = new Map()
     for (const site of sites) counts.set(site.status, (counts.get(site.status) || 0) + 1)
@@ -236,6 +267,23 @@ function NonRunReviewPage() {
     () => sites.filter((site) => latestVerdict.has(site.id)).length,
     [sites, latestVerdict]
   )
+
+  // 工作台按「当前筛选结果」顺序逐条核对；判定完的站点自动离开队列，指针不动即自动指向下一条
+  const current = filtered.length ? filtered[Math.min(workbenchIndex, filtered.length - 1)] : null
+
+  const currentHref = useMemo(() => {
+    if (!current?.url) return null
+    try {
+      return safeSiteUrl(current.url)
+    } catch {
+      return null
+    }
+  }, [current])
+
+  // 换筛选条件时回到队列开头，避免指针停在一个不相关的位置
+  useEffect(() => {
+    setWorkbenchIndex(0)
+  }, [scope, search, statusFilter])
 
   return (
     <Box className="mx-auto max-w-6xl">
@@ -248,9 +296,15 @@ function NonRunReviewPage() {
             逐条核对截止 {SNAPSHOT_DATE} 成员列表中状态非 RUN 的站点（含 WAIT），判定其是否符合成员规则。
           </Typography>
         </Box>
-        <Box className="flex gap-2">
+        <Box className="flex flex-wrap gap-2">
+          <Button variant={mode === 'list' ? 'contained' : 'outlined'} onClick={() => setMode('list')}>
+            列表模式
+          </Button>
+          <Button variant={mode === 'workbench' ? 'contained' : 'outlined'} onClick={() => setMode('workbench')}>
+            工作台模式
+          </Button>
           <Button variant="outlined" onClick={load} disabled={loading}>
-            刷新列表
+            刷新
           </Button>
           <Button
             variant="contained"
@@ -268,7 +322,7 @@ function NonRunReviewPage() {
       </Box>
 
       <Alert severity="warning" className="mt-5">
-        判定会<strong>立即同步上游</strong>：符合规则 → 状态改回 RUN；异常待定 → 状态改为 WAIT；待删除 → <strong>直接删除上游站点且无法恢复</strong>。每次判定（含改判）都会追加到台账并可导出 CSV 公示。
+        判定会<strong>立即同步上游</strong>：符合规则 → 状态改回 RUN；异常待定 → 状态改为 WAIT；删除 → <strong>直接删除上游站点且无法恢复</strong>。每次判定（含改判）都会追加到台账并可导出 CSV 公示。
       </Alert>
 
       <Card className="mt-4 rounded-2xl">
@@ -330,7 +384,134 @@ function NonRunReviewPage() {
             <Chip size="small" label={'当前筛选 ' + filtered.length} />
           </Box>
 
-          {loading && sites.length === 0 ? (
+          {mode === 'workbench' ? (
+            <Box className="mt-4 grid gap-4 lg:grid-cols-[360px_minmax(0,1fr)]">
+              <Box className="flex flex-col gap-3">
+                <Box>
+                  <Box className="mb-1 flex items-center justify-between">
+                    <Typography variant="body2" className="font-medium">
+                      进度
+                    </Typography>
+                    <Typography variant="caption" color="text.secondary">
+                      {judgedCount} / {sites.length}
+                    </Typography>
+                  </Box>
+                  <LinearProgress
+                    variant="determinate"
+                    value={sites.length ? Math.round((judgedCount / sites.length) * 100) : 0}
+                    className="rounded"
+                  />
+                  <Typography variant="caption" color="text.secondary" className="mt-1 block">
+                    当前筛选剩余 {filtered.length} 条，本条第 {Math.min(workbenchIndex + 1, filtered.length)} 条
+                  </Typography>
+                </Box>
+
+                <Divider />
+
+                {current ? (
+                  <>
+                    <Box>
+                      <Typography variant="h6" className="font-semibold text-slate-900">
+                        {current.name || '未命名站点'}
+                      </Typography>
+                      <Box className="mt-2 flex flex-wrap items-center gap-1">
+                        <Chip size="small" label={'ID ' + current.id} />
+                        <Chip size="small" label={statusLabel(current.status)} />
+                      </Box>
+                      {currentHref ? (
+                        <Link
+                          href={currentHref}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-2 block break-all text-xs"
+                        >
+                          {currentHref}
+                        </Link>
+                      ) : (
+                        <Typography variant="caption" color="error" className="mt-2 block">
+                          链接无效
+                        </Typography>
+                      )}
+                    </Box>
+
+                    <Box>
+                      <Typography variant="caption" color="text.secondary">
+                        巡查备注
+                      </Typography>
+                      <Typography variant="body2" className="break-all">
+                        {current.failedReason || '—'}
+                      </Typography>
+                    </Box>
+
+                    <Divider />
+
+                    <Stack spacing={1}>
+                      <Button
+                        fullWidth
+                        variant="contained"
+                        color="success"
+                        disabled={saving}
+                        onClick={() => judgeQuick(current, VERDICT_KEEP)}
+                      >
+                        符合规则（改回 RUN）
+                      </Button>
+                      <Button
+                        fullWidth
+                        variant="contained"
+                        color="info"
+                        disabled={saving}
+                        onClick={() => judgeQuick(current, VERDICT_ABNORMAL)}
+                      >
+                        标记异常（改为 WAIT）
+                      </Button>
+                      <Button
+                        fullWidth
+                        variant="contained"
+                        color="error"
+                        disabled={saving}
+                        onClick={() => judgeQuick(current, VERDICT_DELETE)}
+                      >
+                        删除（不可恢复）
+                      </Button>
+                      <Button
+                        fullWidth
+                        variant="text"
+                        disabled={saving || workbenchIndex >= filtered.length - 1}
+                        onClick={() => setWorkbenchIndex((value) => value + 1)}
+                      >
+                        跳过，下一条
+                      </Button>
+                    </Stack>
+                  </>
+                ) : (
+                  <Typography color="text.secondary" className="py-6 text-center">
+                    {scope === 'pending' && sites.length > 0
+                      ? '待判定队列已清空，切到「已判定」可复核。'
+                      : '没有符合条件的站点。'}
+                  </Typography>
+                )}
+              </Box>
+
+              <Box className="min-h-[420px] overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+                {currentHref ? (
+                  <Box
+                    component="iframe"
+                    key={currentHref}
+                    src={currentHref}
+                    title={'站点预览 ' + (current?.name || '')}
+                    referrerPolicy="no-referrer"
+                    className="h-[calc(100vh-300px)] min-h-[420px] w-full border-0 bg-white"
+                  />
+                ) : (
+                  <Box className="flex h-full items-center justify-center p-6">
+                    <Typography color="text.secondary" className="text-center">
+                      该站点没有可用链接，请在左侧直接判定。
+                    </Typography>
+                  </Box>
+                )}
+              </Box>
+            </Box>
+          ) : loading && sites.length === 0 ? (
             <Box className="flex justify-center py-10">
               <CircularProgress />
             </Box>
@@ -349,8 +530,8 @@ function NonRunReviewPage() {
                     <TableCell>站点</TableCell>
                     <TableCell>状态</TableCell>
                     <TableCell>巡查备注</TableCell>
-                    <TableCell>判定</TableCell>
-                    <TableCell>操作</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>判定</TableCell>
+                    <TableCell sx={{ whiteSpace: 'nowrap' }}>操作</TableCell>
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -387,7 +568,7 @@ function NonRunReviewPage() {
                             {site.failedReason || '—'}
                           </Typography>
                         </TableCell>
-                        <TableCell>
+                        <TableCell sx={{ whiteSpace: 'nowrap' }}>
                           {record ? (
                             <Box className="flex flex-col gap-1">
                               <Chip size="small" color={VERDICT_COLOR[record.verdict] || 'default'} label={verdictLabel(record)} />
@@ -401,12 +582,12 @@ function NonRunReviewPage() {
                               </Typography>
                             </Box>
                           ) : (
-                            <Typography variant="caption" color="text.secondary">
+                            <Typography variant="caption" color="text.secondary" sx={{ whiteSpace: 'nowrap' }}>
                               未判定
                             </Typography>
                           )}
                         </TableCell>
-                        <TableCell>
+                        <TableCell sx={{ whiteSpace: 'nowrap' }}>
                           {record ? (
                             <Button size="small" onClick={() => openDialog(site)}>
                               改判
@@ -420,7 +601,7 @@ function NonRunReviewPage() {
                                 标记异常
                               </Button>
                               <Button size="small" color="error" onClick={() => openDialog(site, VERDICT_DELETE)}>
-                                标记待删除
+                                删除
                               </Button>
                             </Stack>
                           )}
