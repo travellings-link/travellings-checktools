@@ -65,6 +65,14 @@ function statusLabel(status) {
   return label && label !== status ? status + '（' + label + '）' : status || '—'
 }
 
+// 判定目标的最终状态；与站点当前状态相同就意味着不用请求上游（后端据此跳过）
+const VERDICT_STATUS = { [VERDICT_KEEP]: 'RUN', [VERDICT_ABNORMAL]: 'WAIT' }
+
+function statusUnchanged(site, verdict) {
+  const next = VERDICT_STATUS[verdict]
+  return Boolean(next) && next === site?.status
+}
+
 function verdictLabel(record) {
   if (!record) return '—'
   const base = VERDICT_LABEL[record.verdict] || record.verdict
@@ -241,10 +249,13 @@ function NonRunReviewPage({ kind = 'nonrun' }) {
       })
       if (record) setVerdicts((list) => [record, ...list])
       setTarget(null)
+      // 状态没变化时上游根本没被请求，不能说「已同步」，否则操作者会以为改动生效了
       showToast(
         verdict === VERDICT_DELETE
           ? '已删除上游站点并记录台账：' + (target.name || 'ID ' + target.id)
-          : '已同步上游并记录判定：' + (target.name || 'ID ' + target.id) + ' → ' + verdictLabel(record)
+          : statusUnchanged(target, verdict)
+            ? '与原本状态一致（' + target.status + '），未请求上游：' + (target.name || 'ID ' + target.id)
+            : '已同步上游并记录判定：' + (target.name || 'ID ' + target.id) + ' → ' + verdictLabel(record)
       )
     } catch (error) {
       showToast(errorMessage(error, '提交判定失败'), 'error')
@@ -273,7 +284,11 @@ function NonRunReviewPage({ kind = 'nonrun' }) {
         detail: null
       })
       if (record) setVerdicts((list) => [record, ...list])
-      showToast('已同步上游并记录判定：' + (site.name || 'ID ' + site.id) + ' → ' + verdictLabel(record))
+      showToast(
+        statusUnchanged(site, nextVerdict)
+          ? '与原本状态一致（' + site.status + '），未请求上游：' + (site.name || 'ID ' + site.id)
+          : '已同步上游并记录判定：' + (site.name || 'ID ' + site.id) + ' → ' + verdictLabel(record)
+      )
     } catch (error) {
       showToast(errorMessage(error, '提交判定失败'), 'error')
     } finally {
