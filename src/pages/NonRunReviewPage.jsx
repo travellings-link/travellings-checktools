@@ -69,7 +69,7 @@ function verdictLabel(record) {
   return record.verdict === VERDICT_DELETE && record.reason ? base + '：' + record.reason : base
 }
 
-function toCsv(rows) {
+function toCsv(rows, prefix) {
   const header = ['站点ID', '站点名称', '网址', '状态', '判定', '删除原因', '补充说明', '操作人', '判定时间']
   const cell = (value) => {
     let text = String(value ?? '')
@@ -94,19 +94,39 @@ function toCsv(rows) {
   return '\ufeff' + lines.map((line) => line.map(cell).join(',')).join('\r\n')
 }
 
-function downloadCsv(rows) {
-  const blob = new Blob([toCsv(rows)], { type: 'text/csv;charset=utf-8' })
+function downloadCsv(rows, prefix) {
+  const blob = new Blob([toCsv(rows, prefix)], { type: 'text/csv;charset=utf-8' })
   const url = URL.createObjectURL(blob)
   const anchor = document.createElement('a')
   anchor.href = url
-  anchor.download = '非RUN站点判定台账_' + SNAPSHOT_DATE + '.csv'
+  anchor.download = prefix + SNAPSHOT_DATE + '.csv'
   document.body.appendChild(anchor)
   anchor.click()
   anchor.remove()
   URL.revokeObjectURL(url)
 }
 
-function NonRunReviewPage() {
+// 两个倒查专题共用本页逻辑：nonrun = 非 RUN 站点倒查；run = RUN 站点倒查。
+// RUN 版复用同一套三态判定与台账接口，只是清单来源相反。
+const PAGE_CONFIG = {
+  nonrun: {
+    title: '规则修订专题 · 非 RUN 倒查',
+    intro: '逐条核对截止 ' + SNAPSHOT_DATE + ' 成员列表中状态非 RUN 的站点（含 WAIT），判定其是否符合成员规则。',
+    emptyAll: '全部非 RUN 站点都已完成判定，切到「已判定」可复核结果。',
+    fetchOptions: undefined,
+    csvName: '非RUN站点判定台账_'
+  },
+  run: {
+    title: '规则修订专题 · RUN 站点倒查',
+    intro: '逐条复核截止 ' + SNAPSHOT_DATE + ' 成员列表中状态为 RUN 的站点，确认其是否仍符合成员规则。',
+    emptyAll: '全部 RUN 站点都已完成判定，切到「已判定」可复核结果。',
+    fetchOptions: { statuses: ['RUN'], include: true },
+    csvName: 'RUN站点判定台账_'
+  }
+}
+
+function NonRunReviewPage({ kind = 'nonrun' }) {
+  const config = PAGE_CONFIG[kind] || PAGE_CONFIG.nonrun
   const [sites, setSites] = useState([])
   const [verdicts, setVerdicts] = useState([])
   const [loading, setLoading] = useState(false)
@@ -132,7 +152,7 @@ function NonRunReviewPage() {
   const load = useCallback(async () => {
     setLoading(true)
     try {
-      const [siteList, verdictList] = await Promise.all([fetchReviewSites(), fetchVerdicts()])
+      const [siteList, verdictList] = await Promise.all([fetchReviewSites(config.fetchOptions), fetchVerdicts()])
       setSites(siteList)
       setVerdicts(verdictList)
     } catch (error) {
@@ -140,7 +160,7 @@ function NonRunReviewPage() {
     } finally {
       setLoading(false)
     }
-  }, [showToast])
+  }, [showToast, config])
 
   useEffect(() => {
     load()
@@ -290,10 +310,10 @@ function NonRunReviewPage() {
       <Box className="flex flex-wrap items-end justify-between gap-3">
         <Box>
           <Typography variant="h4" className="font-semibold text-slate-900">
-            规则修订专题 · 非 RUN 倒查
+            {config.title}
           </Typography>
           <Typography color="text.secondary" className="mt-1">
-            逐条核对截止 {SNAPSHOT_DATE} 成员列表中状态非 RUN 的站点（含 WAIT），判定其是否符合成员规则。
+            {config.intro}
           </Typography>
         </Box>
         <Box className="flex flex-wrap gap-2">
@@ -313,7 +333,7 @@ function NonRunReviewPage() {
                 showToast('还没有任何判定记录，暂无可导出的台账', 'warning')
                 return
               }
-              downloadCsv(verdicts)
+              downloadCsv(verdicts, config.csvName)
             }}
           >
             导出台账 CSV（{verdicts.length}）
@@ -378,7 +398,7 @@ function NonRunReviewPage() {
           </Box>
 
           <Box className="mt-3 flex flex-wrap gap-2">
-            <Chip size="small" label={'非 RUN 站点 ' + sites.length} />
+            <Chip size="small" label={'清单站点 ' + sites.length} />
             <Chip size="small" color="success" label={'已判定 ' + judgedCount} />
             <Chip size="small" label={'剩余待判定 ' + (sites.length - judgedCount)} />
             <Chip size="small" label={'当前筛选 ' + filtered.length} />
@@ -517,9 +537,7 @@ function NonRunReviewPage() {
             </Box>
           ) : filtered.length === 0 ? (
             <Typography color="text.secondary" className="py-10 text-center">
-              {scope === 'pending' && sites.length > 0
-                ? '全部非 RUN 站点都已完成判定，切到「已判定」可复核结果。'
-                : '没有符合条件的站点。'}
+              {scope === 'pending' && sites.length > 0 ? config.emptyAll : '没有符合条件的站点。'}
             </Typography>
           ) : (
             <Box className="mt-4 overflow-x-auto">

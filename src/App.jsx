@@ -9,6 +9,7 @@ import ManagePage from './pages/ManagePage'
 import NonRunReviewPage from './pages/NonRunReviewPage'
 import NotFoundPage from './pages/NotFoundPage'
 import RecordsPage from './pages/RecordsPage'
+import RunReviewPage from './pages/RunReviewPage'
 import UsersPage from './pages/UsersPage'
 
 function App() {
@@ -33,6 +34,15 @@ function App() {
           element={
             <RequireAdmin>
               <NonRunReviewPage />
+            </RequireAdmin>
+          }
+        />
+        {/* 规则修订专题 · RUN 站点倒查；专题结束后连同页面一起删除 */}
+        <Route
+          path="run-review"
+          element={
+            <RequireAdmin>
+              <RunReviewPage />
             </RequireAdmin>
           }
         />

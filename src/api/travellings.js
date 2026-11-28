@@ -58,12 +58,17 @@ export function safeSiteUrl(value) {
   return url.href
 }
 
-// 规则修订专题（非 RUN 倒查）用：拉取上游全量站点，仅保留状态非 RUN 的（含 WAIT / LOST / ERROR / TIMEOUT / 4xx-5xx）。
+// 规则修订专题（倒查）用：拉取上游全量站点并按目标状态集过滤。
 // 上游 /all 单次返回全量（当前约 1675 条），因此不需要分页。
-export async function fetchReviewSites() {
+// include 为 true 时只保留 status 属于 statuses 的；默认 false 表示「排除这些状态」。
+export async function fetchReviewSites({ statuses = ['RUN'], include = false } = {}) {
   const body = unwrap(await travellingsApi.get('/all'))
   const sites = Array.isArray(body.data) ? body.data : []
-  return sites.filter((site) => site?.status !== 'RUN')
+  const wanted = new Set(statuses)
+  return sites.filter((site) => {
+    const matched = wanted.has(site?.status)
+    return include ? matched : !matched
+  })
 }
 
 export async function fetchRandomGoSite() {

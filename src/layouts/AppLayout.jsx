@@ -46,6 +46,7 @@ function AppLayout() {
     if (isAdmin) {
       // 规则修订专题入口，同样仅维护组可见；专题结束后整行删除
       items.push({ label: '非 RUN 倒查', path: '/non-run-review', icon: <RuleRoundedIcon /> })
+      items.push({ label: 'RUN 倒查', path: '/run-review', icon: <RuleRoundedIcon /> })
       items.push({ label: '异常管理', path: '/manage', icon: <ReportProblemRoundedIcon /> })
       items.push({ label: '用户列表', path: '/users', icon: <PeopleRoundedIcon /> })
     }
