@@ -117,6 +117,7 @@ function NonRunReviewPage() {
   const [verdict, setVerdict] = useState(VERDICT_KEEP)
   const [reason, setReason] = useState(NON_RUN_REMOVAL_REASONS[0])
   const [detail, setDetail] = useState('')
+  const [confirmName, setConfirmName] = useState('')
   const [saving, setSaving] = useState(false)
   const [toast, setToast] = useState({ open: false, message: '', severity: 'success' })
 
@@ -182,6 +183,7 @@ function NonRunReviewPage() {
         : NON_RUN_REMOVAL_REASONS[0]
     )
     setDetail(existing?.detail || '')
+    setConfirmName('')
   }
 
   const submit = async () => {
@@ -190,6 +192,11 @@ function NonRunReviewPage() {
     if (verdict === VERDICT_DELETE) {
       if (reason === OTHER_REASON && !trimmedDetail) {
         showToast('选择「其他」时必须填写具体原因', 'warning')
+        return
+      }
+      // 上游删除不可逆，要求输入站点名确认是本人有意为之
+      if (confirmName.trim() !== (target.name || '').trim()) {
+        showToast('请输入站点名称以确认删除', 'warning')
         return
       }
     }
@@ -207,7 +214,11 @@ function NonRunReviewPage() {
       })
       if (record) setVerdicts((list) => [record, ...list])
       setTarget(null)
-      showToast('已记录判定：' + (target.name || 'ID ' + target.id) + ' → ' + verdictLabel(record))
+      showToast(
+        verdict === VERDICT_DELETE
+          ? '已删除上游站点并记录台账：' + (target.name || 'ID ' + target.id)
+          : '已同步上游并记录判定：' + (target.name || 'ID ' + target.id) + ' → ' + verdictLabel(record)
+      )
     } catch (error) {
       showToast(errorMessage(error, '提交判定失败'), 'error')
     } finally {
@@ -256,8 +267,8 @@ function NonRunReviewPage() {
         </Box>
       </Box>
 
-      <Alert severity="info" className="mt-5">
-        判定只登记，不会修改上游站点状态、也不会真正删除；实际处理由专题结束后统一执行。每次判定（含改判）都追加到台账并可导出 CSV 公示。
+      <Alert severity="warning" className="mt-5">
+        判定会<strong>立即同步上游</strong>：符合规则 → 状态改回 RUN；异常待定 → 状态改为 WAIT；待删除 → <strong>直接删除上游站点且无法恢复</strong>。每次判定（含改判）都会追加到台账并可导出 CSV 公示。
       </Alert>
 
       <Card className="mt-4 rounded-2xl">
@@ -496,6 +507,17 @@ function NonRunReviewPage() {
                 : '可留空。'
             }
           />
+          {verdict === VERDICT_DELETE ? (
+            <TextField
+              fullWidth
+              size="small"
+              className="mt-4"
+              label="输入站点名称以确认删除"
+              value={confirmName}
+              onChange={(event) => setConfirmName(event.target.value)}
+              helperText="删除上游站点后无法恢复，请确认是本人有意为之。"
+            />
+          ) : null}
         </DialogContent>
         <DialogActions>
           <Button onClick={() => setTarget(null)} disabled={saving}>
@@ -505,9 +527,9 @@ function NonRunReviewPage() {
             variant="contained"
             color={verdict === VERDICT_DELETE ? 'error' : 'primary'}
             onClick={submit}
-            disabled={saving}
+            disabled={saving || (verdict === VERDICT_DELETE && confirmName.trim() !== (target?.name || '').trim())}
           >
-            {saving ? '提交中…' : '确认判定'}
+            {saving ? '提交中…' : verdict === VERDICT_DELETE ? '确认删除' : '确认判定'}
           </Button>
         </DialogActions>
       </Dialog>
