@@ -6,6 +6,7 @@ import DashboardPage from './pages/DashboardPage'
 import AuthTransitionPage from './pages/AuthTransitionPage'
 import LoginPage from './pages/LoginPage'
 import ManagePage from './pages/ManagePage'
+import NonRunReviewPage from './pages/NonRunReviewPage'
 import NotFoundPage from './pages/NotFoundPage'
 import RecordsPage from './pages/RecordsPage'
 import UsersPage from './pages/UsersPage'
@@ -26,6 +27,15 @@ function App() {
         <Route index element={<DashboardPage />} />
         <Route path="check" element={<CheckPage />} />
         <Route path="records" element={<RecordsPage />} />
+        {/* 规则修订专题 · 非 RUN 倒查；专题结束后连同页面一起删除 */}
+        <Route
+          path="non-run-review"
+          element={
+            <RequireAdmin>
+              <NonRunReviewPage />
+            </RequireAdmin>
+          }
+        />
         <Route
           path="manage"
           element={

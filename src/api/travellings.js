@@ -58,6 +58,14 @@ export function safeSiteUrl(value) {
   return url.href
 }
 
+// 规则修订专题（非 RUN 倒查）用：拉取上游全量站点，仅保留状态非 RUN 的（含 WAIT / LOST / ERROR / TIMEOUT / 4xx-5xx）。
+// 上游 /all 单次返回全量（当前约 1675 条），因此不需要分页。
+export async function fetchReviewSites() {
+  const body = unwrap(await travellingsApi.get('/all'))
+  const sites = Array.isArray(body.data) ? body.data : []
+  return sites.filter((site) => site?.status !== 'RUN')
+}
+
 export async function fetchRandomGoSite() {
   for (let attempt = 0; attempt < MAX_RANDOM_ATTEMPTS; attempt += 1) {
     const body = unwrap(await travellingsApi.get('/random', { params: { tag: GO_TAG } }))
